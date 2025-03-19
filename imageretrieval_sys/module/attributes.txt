@@ -1,0 +1,12 @@
+Color: white, red, blue, black, yellow, purple, pink, orange, green, brown, gray, silver, golden, beige, cyan, magenta, light blue, dark green, navy, maroon, turquoise, olive, lavender, reddish, bluish, yellowish, grayish
+Shape: round, square, triangle, circular, hexagonal, rectangular, oval, cylindrical, spherical, cubic, conical, pyramidal, wavy, twisted, curved, jagged, spiral, irregular
+Size: large, small, big, tiny, huge, miniature, gigantic, enormous, massive, immense, vast, broad, narrow, wide, thick, thin, tall, short, long, compact, petite, bulky, slender
+Quantity: some, many, few, several, numerous, all, none, every, one, two, three, dozen, hundred, thousand, infinite, abundant, countless, sparse, excessive, sufficient, meager, four
+Material: wooden, metallic, plastic, ceramic, glassy, silky, leathery, cotton, woolen, paper, concrete, rubber, velvet, stone, marble, bronze, golden, silver, crystal, translucent, opaque
+Position: top, bottom, left, right, middle, central, adjacent, nearby, foreground, background, inner, outer, upper, lower, distant, close, horizontal, vertical, diagonal, symmetrical, asymmetrical
+Brightness: bright, dim, shiny, glowing, shadowy, dark, dull, luminous, radiant, gleaming, twinkling, flickering, transparent, hazy, neon, pale, glossy, matte, misty, foggy
+Emotion: joyful, cheerful, peaceful, exciting, lively, happy, calm, melancholic, gloomy, sad, depressing, mysterious, eerie, frightening, hopeful, romantic, nostalgic, suspenseful, serene
+Speed: fast, slow, swift, rapid, sluggish, leisurely, hurried, instant, sudden, steady, gradual, brisk, fleeting, momentary
+Weather: sunny, cloudy, rainy, stormy, foggy, snowy, windy, humid, chilly, freezing, scorching, breezy, overcast, drizzly, misty
+Age: young, youthful, juvenile, newborn, fresh, infant, toddler, adolescent, teenage, old, aged, elderly, ancient, antique, senior, decrepit, timeworn, mature, hoary, middle-aged, adult, grown-up, new, brand-new, fresh, recent, modern, contemporary, up-to-date, renovated, vintage, old-fashioned, worn-out, dilapidated, weathered, archaic
+Texture: smooth, rough, silky, glossy, bumpy, grainy, shaggy, furry, fluffy, sticky, slimy, greasy, hard, soft, spongy, brittle, cracked, damp, translucent, opaque
