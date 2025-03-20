@@ -49,7 +49,7 @@ def read_links_csv(file_path):
     """ Đọc file chứa link ảnh """
     try:
         df = pd.read_csv(
-            file_path, sep=r'\|', names=['image_name', 'image_link'], dtype=str, engine='python'
+            file_path, sep=r'\,', names=['image_name', 'image_link'], dtype=str, engine='python'
         )
         return {row['image_name'].strip(): row['image_link'].strip() for _, row in df.fillna("").iterrows()}
     except Exception as e:
@@ -67,7 +67,7 @@ def merge_dicts(comments_data, links_data):
     return merged
 
 if __name__ == "__main__":
-    comments_file = "D:/Learn/InSchool/NCKH/image_retriveal_sys/Process/data/output_test.csv"
+    comments_file = "D:/Learn/InSchool/NCKH/image_retriveal_sys/Process/data/output.csv"
     links_file = "D:/Learn/InSchool/NCKH/image_retriveal_sys/Process/data/image_links.csv"
 
     comments_data = read_comments_csv(comments_file)

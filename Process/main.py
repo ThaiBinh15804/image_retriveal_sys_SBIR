@@ -31,14 +31,15 @@ def main():
 
     # Đọc file OWL (Ontology)
     start_time = time.time()
-    owl_file = os.path.join(current_dir, "module", "flickr_onto.owl")
+    # owl_file = os.path.join(current_dir, "module", "flickr_onto.owl")
+    owl_file = "D:/Learn/InSchool/NCKH/image_retriveal_sys/output_ontology.owl"
     ontology_handler = OntologyHandler(owl_file)
     print(f"Loaded ontology in {time.time() - start_time:.2f} seconds")
 
     # Đọc dữ liệu từ CSV
     start_time = time.time()
-    comments_file = os.path.join(current_dir, "data", "output_test.csv")
-    links_file = os.path.join(current_dir, "data", "image_links_test.csv")
+    comments_file = os.path.join(current_dir, "data", "3","comments.csv")
+    links_file = os.path.join(current_dir, "data", "3","images.csv")
 
     comments_data = read_comments_csv(comments_file)
     links_data = read_links_csv(links_file)
