@@ -6,25 +6,26 @@ def process_comments_chunk(chunk):
     for _, row in chunk.fillna("").iterrows():
         image_name = str(row['image_name']).strip()
         comment = str(row['comment']).strip()
-
-        if image_name in data:
-            data[image_name]["comments"].append(comment)
-        else:
-            data[image_name] = {"comments": [comment], "link": None}
-
+        
+        if image_name and image_name not in ["File Name"]:  # Lọc các giá trị không hợp lệ
+            if image_name in data:
+                data[image_name]["comments"].append(comment)
+            else:
+                data[image_name] = {"comments": [comment], "link": None}
+    
     return data
 
 def read_comments_csv(file_path, chunksize=10000):
     """ Đọc CSV bình luận """
     try:
         df_iterator = pd.read_csv(
-            file_path, sep='|', names=['image_name', 'comment_number', 'comment'], 
-            dtype=str, chunksize=chunksize, encoding='latin-1', on_bad_lines='skip'
+            file_path, sep=r'\|', names=['image_name', 'comment_number', 'comment'], 
+            dtype=str, chunksize=chunksize, encoding='latin-1', on_bad_lines='skip', engine='python'
         )
     except UnicodeDecodeError:
         df_iterator = pd.read_csv(
-            file_path, sep='|', names=['image_name', 'comment_number', 'comment'], 
-            dtype=str, chunksize=chunksize, encoding='utf-8', on_bad_lines='skip'
+            file_path, sep=r'\|', names=['image_name', 'comment_number', 'comment'], 
+            dtype=str, chunksize=chunksize, encoding='utf-8', on_bad_lines='skip', engine='python'
         )
     
     results = []
@@ -47,9 +48,12 @@ def merge_comment_dicts(comment_dicts):
 def read_links_csv(file_path):
     """ Đọc file chứa link ảnh """
     try:
-        df = pd.read_csv(file_path, names=['image_name', 'image_link'], dtype=str)
+        df = pd.read_csv(
+            file_path, sep=r'\|', names=['image_name', 'image_link'], dtype=str, engine='python'
+        )
         return {row['image_name'].strip(): row['image_link'].strip() for _, row in df.fillna("").iterrows()}
-    except Exception:
+    except Exception as e:
+        print(f"Lỗi khi đọc file links: {e}")
         return {}
 
 def merge_dicts(comments_data, links_data):
@@ -63,8 +67,8 @@ def merge_dicts(comments_data, links_data):
     return merged
 
 if __name__ == "__main__":
-    comments_file = "D:/Learn/InSchool/NghienCuuKhoaHoc/Flickr/flickr30k_images/results-test.csv"
-    links_file = "D:/Learn/InSchool/NghienCuuKhoaHoc/Flickr/flickr30k_images/image_links-test.csv"
+    comments_file = "D:/Learn/InSchool/NCKH/image_retriveal_sys/Process/data/output_test.csv"
+    links_file = "D:/Learn/InSchool/NCKH/image_retriveal_sys/Process/data/image_links.csv"
 
     comments_data = read_comments_csv(comments_file)
     links_data = read_links_csv(links_file)

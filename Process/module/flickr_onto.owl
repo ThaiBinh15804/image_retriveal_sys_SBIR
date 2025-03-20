@@ -286,6 +286,17 @@
     
 
 
+    <!-- http://www.semanticweb.org/asus/ontologies/2025/1/untitled-ontology-26#Wordnet -->
+
+    <owl:DatatypeProperty rdf:about="http://www.semanticweb.org/asus/ontologies/2025/1/untitled-ontology-26#Wordnet">
+        <rdfs:domain rdf:resource="http://www.semanticweb.org/asus/ontologies/2025/1/untitled-ontology-26#Action"/>
+        <rdfs:domain rdf:resource="http://www.semanticweb.org/asus/ontologies/2025/1/untitled-ontology-26#Context"/>
+        <rdfs:domain rdf:resource="http://www.semanticweb.org/asus/ontologies/2025/1/untitled-ontology-26#Object"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+    </owl:DatatypeProperty>
+    
+
+
     <!-- 
     ///////////////////////////////////////////////////////////////////////////////////////
     //

@@ -4,7 +4,7 @@ import cors from 'cors'
 
 const app = express()
 const PORT = 2020
-const GRAPHDB_ENDPOINT = 'http://localhost:7200/repositories/flickr_onto'
+const GRAPHDB_ENDPOINT = 'http://localhost:7200/repositories/new'
 
 app.use(express.json())
 app.use(cors())

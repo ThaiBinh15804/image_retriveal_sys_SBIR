@@ -1,18 +1,49 @@
 from owlready2 import *
+from nltk.corpus import wordnet  # Ensure NLTK is installed and WordNet is downloaded
+from nltk.tokenize import word_tokenize
+from nltk.corpus import stopwords
 
 class OntologyHandler:
     def __init__(self, ontology_path):
         """Khởi tạo handler và tải ontology từ file OWL."""
         self.ontology = get_ontology(ontology_path).load()
         self.ontology_path = ontology_path
+
+    def find_wordnet(self, name, context):
+        """Tìm các WordNet phù hợp nhất liên quan đến tên và ngữ cảnh."""
+        synsets = wordnet.synsets(name)
+        if not synsets:
+            return None
+
+        # Tokenize and clean the context description
+        context_tokens = set(word_tokenize(context.lower()))
+        stop_words = set(stopwords.words("english"))
+        context_tokens = context_tokens - stop_words
+
+        # Rank synsets based on overlap with context
+        ranked_synsets = []
+        for synset in synsets:
+            definition_tokens = set(word_tokenize(synset.definition().lower()))
+            overlap = len(context_tokens & definition_tokens)
+            if overlap > 0:
+                ranked_synsets.append((synset, overlap))
+
+        # Sort by overlap score in descending order
+        ranked_synsets.sort(key=lambda x: x[1], reverse=True)
+
+        # Return the top definitions
+        return [synset.definition() for synset, _ in ranked_synsets[:3]]  # Top 3 definitions
         
     def add_image_entity(self, image_name, image_url, image_description):
         """Thêm thực thể Image vào ontology."""
+        if not image_url:
+            raise ValueError("The image_url cannot be None or empty!")
+
         with self.ontology:
             ImageClass = self.ontology.Image
             new_image = ImageClass(image_name)
             new_image.ImageName = [image_name]
-            new_image.ImageURL = [image_url]
+            new_image.ImageURL = [image_url]  # Ensure image_url is not None
             new_image.ImageDescription = [image_description]
     
     def process_and_add_entities(self, image_id, classified_entities, classified_attributes, classified_relations):
@@ -35,6 +66,11 @@ class OntologyHandler:
                     ontology_entity.ContextName = [entity]
                 elif class_name == "Action":
                     ontology_entity.ActionName = [entity]
+
+                # Tìm và gán WordNet
+                wordnet_definitions = self.find_wordnet(entity, classified_attributes.get("image_description", ""))
+                if wordnet_definitions:
+                    ontology_entity.Wordnet = wordnet_definitions
 
                 # Lưu ánh xạ để dùng cho thuộc tính & quan hệ
                 entity_mapping[entity] = entity_name

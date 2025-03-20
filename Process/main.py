@@ -31,18 +31,19 @@ def main():
 
     # Đọc file OWL (Ontology)
     start_time = time.time()
-    owl_file = "flickr_onto.owl"
+    owl_file = os.path.join(current_dir, "module", "flickr_onto.owl")
     ontology_handler = OntologyHandler(owl_file)
     print(f"Loaded ontology in {time.time() - start_time:.2f} seconds")
 
     # Đọc dữ liệu từ CSV
     start_time = time.time()
-    comments_file = "D:/Learn/InSchool/NghienCuuKhoaHoc/Flickr/flickr30k_images/csv_code/output/1/comments.csv"
-    links_file = "D:/Learn/InSchool/NghienCuuKhoaHoc/Flickr/flickr30k_images/csv_code/output/1/images.csv"
+    comments_file = os.path.join(current_dir, "data", "output_test.csv")
+    links_file = os.path.join(current_dir, "data", "image_links_test.csv")
 
     comments_data = read_comments_csv(comments_file)
     links_data = read_links_csv(links_file)
     unified_data = merge_dicts(comments_data, links_data)
+    print(unified_data)
     print(f"Loaded CSV data in {time.time() - start_time:.2f} seconds")
 
     # Xử lý từng ảnh
