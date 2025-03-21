@@ -9,6 +9,9 @@ from classification import EntityClassifier
 from fastapi.middleware.cors import CORSMiddleware
 from sentence_transformers import SentenceTransformer, util
 
+nltk.download('wordnet')
+nltk.download('omw-1.4')
+nltk.download('averaged_perceptron_tagger')
 
 app = FastAPI()
 
@@ -126,7 +129,7 @@ def generate_sparql_query(data):
         if synonyms:
             if entity not in synonyms:
                 synonyms.append(entity)
-            where_clauses.append(f"    VALUES {synonym_var} {{ {' '.join(f'\"{syn}\"' for syn in synonyms)} }}")
+            where_clauses.append(f"""    VALUES {synonym_var} {{ {' '.join(f'"{syn}"' for syn in synonyms)} }}""")
             where_clauses.append(f"    OPTIONAL {{ {entity_var} :Wordnet {synonym_var}. }}")
         else:
             where_clauses.append(f"    {entity_var} :ObjectName \"{entity}\".")
@@ -146,7 +149,7 @@ def generate_sparql_query(data):
                     attr_synonym_var = f"?synonym_{attr}_{value.replace(' ', '_')}"
 
                     if attr_synonyms:
-                        where_clauses.append(f"    VALUES {attr_synonym_var} {{ {' '.join(f'\"{syn}\"' for syn in attr_synonyms)} }}")
+                        where_clauses.append(f"""    VALUES {attr_synonym_var} {{ {' '.join(f'"{syn}"' for syn in attr_synonyms)} }}""")
                         where_clauses.append(f"    OPTIONAL {{ {entity_var} :{attr} {attr_synonym_var}. }}")
                     else:
                         where_clauses.append(f"    {entity_var} :{attr} \"{value}\".")
@@ -165,7 +168,7 @@ def generate_sparql_query(data):
         synonyms = get_synonyms(relation['predicate'],  max_synonyms=5)
         if synonyms:
             synonym_var = f"?synonym_ActionName_{action_name}"
-            where_clauses.append(f"    VALUES {synonym_var} {{ {' '.join(f'\"{syn}\"' for syn in synonyms)} }}")
+            where_clauses.append(f"""    VALUES {synonym_var} {{ {' '.join(f'"{syn}"' for syn in synonyms)} }}""")
             where_clauses.append(f"    OPTIONAL {{ {action_var} :Wordnet {synonym_var}. }}")
         else:
             where_clauses.append(f"    {action_var} :ActionName \"{relation['predicate']}\".")
