@@ -1,6 +1,6 @@
 import os
-# import time
 import nltk
+import spacy
 from fastapi import FastAPI
 from pydantic import BaseModel
 from nltk.corpus import wordnet
@@ -16,6 +16,7 @@ nltk.download('averaged_perceptron_tagger_eng')
 app = FastAPI()
 
 model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+nlp = spacy.load("en_core_web_sm")
 
 app.add_middleware(
     CORSMiddleware,
@@ -39,71 +40,89 @@ class QueryRequest(BaseModel):
     text: str
 
 
-def get_synonyms(word: str, sentence: str = None, max_synonyms: int = 5):
-    """Lấy danh sách từ đồng nghĩa, hypernyms (từ có nghĩa rộng hơn) và hyponyms (từ có nghĩa hẹp hơn) 
-       và lọc theo ngữ cảnh bằng SBERT nếu có câu."""
+def get_synonyms(word: str, sentence: str = None, max_synonyms: int = 5, similarity_threshold: float = 0.6):
+    """Lấy từ đồng nghĩa chính xác với ngưỡng tương đồng tối thiểu 60% dựa trên ngữ cảnh."""
     if not isinstance(max_synonyms, int):
-        raise TypeError(f"Expected max_synonyms to be an int, but got {type(max_synonyms).__name__}")
+        raise TypeError(f"Expected max_synonyms to be an int, got {type(max_synonyms).__name__}")
+    if not 0 <= similarity_threshold <= 1:
+        raise ValueError("Similarity threshold must be between 0 and 1")
 
     synonyms = set()
-    hypernyms = set()
-    hyponyms = set()
-    lemma_frequencies = []
 
-    # Lấy từ loại (POS tag) của từ đầu vào
-    pos_tag = nltk.pos_tag([word])[0][1]
+    # Xác định POS tag từ ngữ cảnh câu hoặc từ đơn
+    if sentence:
+        doc = nlp(sentence)
+        target_token = next((token for token in doc if token.text.lower() == word.lower()), None)
+        wn_pos = {
+            'NOUN': wordnet.NOUN, 'VERB': wordnet.VERB, 'ADJ': wordnet.ADJ, 'ADV': wordnet.ADV
+        }.get(target_token.pos_ if target_token else 'NOUN', wordnet.NOUN)
+    else:
+        pos_tag = nltk.pos_tag([word])[0][1]
+        wn_pos = {
+            'NN': wordnet.NOUN, 'VB': wordnet.VERB, 'JJ': wordnet.ADJ, 'RB': wordnet.ADV
+        }.get(pos_tag[:2], wordnet.NOUN)
 
-    for synset in wordnet.synsets(word):
+    # Lấy từ đồng nghĩa từ WordNet với POS phù hợp
+    for synset in wordnet.synsets(word, pos=wn_pos):
+        definition = synset.definition().lower()
+        if any(kw in definition for kw in ["slang", "drug", "person", "food", "tool", "machine"]):
+            continue  # Loại bỏ các nghĩa không phù hợp
         for lemma in synset.lemmas():
             lemma_name = lemma.name().replace("_", " ")
-            if lemma_name.lower() != word.lower():
-                lemma_frequencies.append((lemma_name, lemma.count()))
+            if (lemma_name.lower() != word.lower() and 
+                not lemma_name[0].isupper() and 
+                len(lemma_name.split()) <= 2):
+                synonyms.add(lemma_name)
 
-        # Thêm hypernyms (từ rộng hơn)
-        for hyper in synset.hypernyms():
-            for lemma in hyper.lemmas():
-                hypernyms.add(lemma.name().replace("_", " "))
+    if not synonyms:
+        return [word]  # Trả về từ gốc nếu không tìm thấy từ đồng nghĩa
 
-        # Thêm hyponyms (từ hẹp hơn)
-        for hypo in synset.hyponyms():
-            for lemma in hypo.lemmas():
-                hyponyms.add(lemma.name().replace("_", " "))
+    candidate_words = list(synonyms)
 
-    # Gộp từ đồng nghĩa, hypernyms và hyponyms
-    candidate_words = list(set([word for word, _ in lemma_frequencies]) | hypernyms | hyponyms)
-
-    # Nếu không có danh sách từ, trả về rỗng
-    if not candidate_words:
-        return []
-
-    # Lọc từ có độ dài quá lớn để tránh những cụm từ không tự nhiên
-    candidate_words = [w for w in candidate_words if len(w.split()) <= 2]
-
-    # Nếu không có câu để lọc theo ngữ cảnh, trả về danh sách thô
-    if sentence is None:
+    # Nếu không có câu, trả về danh sách thô từ WordNet
+    if not sentence:
         return candidate_words[:max_synonyms]
 
-    # Tạo embedding SBERT để lọc từ phù hợp với ngữ cảnh
-    word_embedding = model.encode(word, convert_to_tensor=True)
-    sentence_embedding = model.encode(sentence, convert_to_tensor=True)
-    candidate_embeddings = model.encode(candidate_words, convert_to_tensor=True)
+    # Tạo ngữ cảnh từ các từ liên quan trong câu
+    doc = nlp(sentence)
+    context_words = set()
+    for token in doc:
+        if token.text.lower() == word.lower():
+            context_words.add(token.head.text.lower())
+            for child in token.children:
+                context_words.add(child.text.lower())
+    context_sentence = " ".join(context_words) if context_words else sentence
 
-    # Tính độ tương đồng giữa từ gốc và từ ứng viên
-    similarities = util.pytorch_cos_sim(word_embedding, candidate_embeddings).squeeze(0).tolist()
+    # Tính embedding cho từ gốc, ngữ cảnh, và các ứng viên
+    embeddings = model.encode([word, context_sentence] + candidate_words, convert_to_tensor=True)
+    word_embedding = embeddings[0]
+    context_embedding = embeddings[1]
+    candidate_embeddings = embeddings[2:]
 
-    # Tính độ tương đồng giữa câu và từ ứng viên
-    sentence_similarities = util.pytorch_cos_sim(sentence_embedding, candidate_embeddings).squeeze(0).tolist()
+    # Tính độ tương đồng giữa từ gốc và các ứng viên
+    word_similarities = util.pytorch_cos_sim(word_embedding, candidate_embeddings).squeeze(0).tolist()
 
-    # Sắp xếp từ theo mức độ phù hợp
-    sorted_candidates = sorted(
-        zip(candidate_words, similarities, sentence_similarities),
-        key=lambda x: (x[1] + x[2]) / 2,  # Trung bình độ tương đồng giữa từ và câu
-        reverse=True
-    )
+    # Tính độ tương đồng giữa ngữ cảnh và các ứng viên
+    context_similarities = util.pytorch_cos_sim(context_embedding, candidate_embeddings).squeeze(0).tolist()
 
-    # Trả về danh sách từ tốt nhất
-    best_synonyms = [word for word, _, _ in sorted_candidates[:max_synonyms]]
-    return best_synonyms
+    # Kết hợp độ tương đồng (trung bình giữa từ gốc và ngữ cảnh)
+    combined_similarities = [(w, (word_sim + context_sim) / 2) 
+                             for w, word_sim, context_sim in zip(candidate_words, word_similarities, context_similarities)]
+
+    # Lọc các từ có độ tương đồng >= 60%
+    filtered_candidates = [(w, sim) for w, sim in combined_similarities if sim >= similarity_threshold]
+    sorted_candidates = sorted(filtered_candidates, key=lambda x: x[1], reverse=True)
+
+    # Chọn các từ đồng nghĩa tốt nhất
+    best_synonyms = [word for word, _ in sorted_candidates[:max_synonyms]]
+    
+    # Đảm bảo từ gốc luôn có mặt nếu không có từ nào vượt ngưỡng
+    if not best_synonyms:
+        return [word]
+    if word.lower() not in [w.lower() for w in best_synonyms]:
+        best_synonyms.append(word)
+
+    return best_synonyms[:max_synonyms]
 
 
 
@@ -167,6 +186,8 @@ def generate_sparql_query(data):
         # Lấy từ đồng nghĩa của quan hệ
         synonyms = get_synonyms(relation['predicate'],  max_synonyms=5)
         if synonyms:
+            if entity not in synonyms:
+                synonyms.append(action_name)
             synonym_var = f"?synonym_ActionName_{action_name}"
             where_clauses.append(f"""    VALUES {synonym_var} {{ {' '.join(f'"{syn}"' for syn in synonyms)} }}""")
             where_clauses.append(f"    OPTIONAL {{ {action_var} :Wordnet {synonym_var}. }}")
