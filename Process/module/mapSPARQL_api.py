@@ -150,8 +150,6 @@ def generate_sparql_query(data):
                 synonyms.append(entity)
             where_clauses.append(f"""    VALUES {synonym_var} {{ {' '.join(f'"{syn}"' for syn in synonyms)} }}""")
             where_clauses.append(f"    OPTIONAL {{ {entity_var} :Wordnet {synonym_var}. }}")
-        else:
-            where_clauses.append(f"    {entity_var} :ObjectName \"{entity}\".")
 
         if entity_class in ["PhysicalObject", "Animal", "Person"]:
             where_clauses.append(f"    {entity_var} :ObjectName {synonym_var}.")
@@ -170,6 +168,7 @@ def generate_sparql_query(data):
                     if attr_synonyms:
                         where_clauses.append(f"""    VALUES {attr_synonym_var} {{ {' '.join(f'"{syn}"' for syn in attr_synonyms)} }}""")
                         where_clauses.append(f"    OPTIONAL {{ {entity_var} :{attr} {attr_synonym_var}. }}")
+                        where_clauses.append(f"    {entity_var} :{attr} \"{attr_synonym_var}\".")
                     else:
                         where_clauses.append(f"    {entity_var} :{attr} \"{value}\".")
 
@@ -191,6 +190,7 @@ def generate_sparql_query(data):
             synonym_var = f"?synonym_ActionName_{action_name}"
             where_clauses.append(f"""    VALUES {synonym_var} {{ {' '.join(f'"{syn}"' for syn in synonyms)} }}""")
             where_clauses.append(f"    OPTIONAL {{ {action_var} :Wordnet {synonym_var}. }}")
+            where_clauses.append(f"    {action_var} :ActionName {synonym_var}.")
         else:
             where_clauses.append(f"    {action_var} :ActionName \"{relation['predicate']}\".")
 
