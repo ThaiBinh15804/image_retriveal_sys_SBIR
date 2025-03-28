@@ -11,9 +11,11 @@ app.use(cors())
 app.use('/images', express.static('D:/VS_CODE/Python/Flickr/flickr30k_images/flickr30k_images/')) 
 app.post('/query', async (req, res) => {
   const body = req.body.body
+  const main_entity = req.body.main_entity || ""
+  const fromImage = req.body.from_image || false
   try {
-    const sparqlResponse = await axios.post("http://localhost:8000/generate_sparql", { text: body })
-        
+    const sparqlResponse = await axios.post("http://localhost:8000/generate_sparql", { text: body }, { params: { from_image: fromImage, main_entity: main_entity } })
+    console.log(sparqlResponse.data)    
     if (!sparqlResponse.data.sparql_query) {
         throw new Error("Invalid SPARQL response from API.");
     }

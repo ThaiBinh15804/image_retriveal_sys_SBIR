@@ -4,6 +4,7 @@ from transformers import BlipProcessor, BlipForConditionalGeneration
 from PIL import Image
 import spacy
 from fastapi.middleware.cors import CORSMiddleware
+from ultralytics import YOLO
 
 # Khởi tạo FastAPI
 app = FastAPI()
@@ -21,6 +22,7 @@ app.add_middleware(
 torch.cuda.empty_cache()
 torch.set_grad_enabled(False)
 
+yolo_model = YOLO("yolov8n.pt")
 nlp = spacy.load("en_core_web_sm")
 
 # Chọn thiết bị chạy mô hình
@@ -29,6 +31,17 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # Tải mô hình BLIP
 blip_processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-large", local_files_only=True)
 blip_model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-large", local_files_only=True).to(device)
+
+def detect_main_entity(image: Image.Image):
+    """Dùng YOLOv8 để nhận diện thực thể chính và trả về tên class"""
+    results = yolo_model(image)
+    
+    if len(results) > 0 and len(results[0].boxes) > 0:
+        boxes = results[0].boxes
+        main_box = max(boxes, key=lambda b: b.conf)  # Chọn box có độ tin cậy cao nhất
+        class_name = yolo_model.names[int(main_box.cls)]  # Lấy tên class
+        return class_name
+    return None
 
 def extract_key_phrases(text):
     """Trích xuất các từ quan trọng từ mô tả"""
@@ -71,7 +84,11 @@ async def analyze_image(file: UploadFile = File(...)):
     # Sinh mô tả ảnh
     description = generate_description(image)
 
+    # Nhận diện thực thể chính
+    main_entity = detect_main_entity(image)
+
     return {
         "filename": file.filename,
         "description": description,
+        "main_entity": main_entity,
     }

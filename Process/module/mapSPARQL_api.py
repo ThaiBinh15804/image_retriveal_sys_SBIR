@@ -1,7 +1,7 @@
 import os
 import nltk
 import spacy
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from pydantic import BaseModel
 from nltk.corpus import wordnet
 from text_preprocessor import TextPreprocessor
@@ -9,9 +9,9 @@ from classification import EntityClassifier
 from fastapi.middleware.cors import CORSMiddleware
 from sentence_transformers import SentenceTransformer, util
 
-nltk.download('wordnet')
-nltk.download('omw-1.4')
-nltk.download('averaged_perceptron_tagger_eng')
+# nltk.download('wordnet')
+# nltk.download('omw-1.4')
+# nltk.download('averaged_perceptron_tagger_eng')
 
 app = FastAPI()
 
@@ -125,53 +125,102 @@ def get_synonyms(word: str, sentence: str = None, max_synonyms: int = 5, similar
     return best_synonyms[:max_synonyms]
 
 
-
-def generate_sparql_query(data):
-    """Sinh truy vấn SPARQL từ dữ liệu phân loại."""
+def generate_sparql_query(data, from_image=False, main_entity=None):
+    """Sinh truy vấn SPARQL từ dữ liệu phân loại, thay đổi điều kiện nếu input từ hình ảnh và so sánh với main_entity."""
     select_clause = "SELECT DISTINCT ?image ?url WHERE {\n"
     where_clauses = []
+    optional_clauses = []
     entity_vars = {}
+
+    # Tính độ tương đồng với main_entity nếu được cung cấp
+    primary_entity = None
+    if main_entity and data["classified_entities"]:
+        # Lấy danh sách các entity
+        entities = list(data["classified_entities"].keys())
+        
+        # Tính embedding cho main_entity và các entity
+        embeddings = model.encode([main_entity] + entities, convert_to_tensor=True)
+        main_embedding = embeddings[0]
+        entity_embeddings = embeddings[1:]
+        
+        # Tính độ tương đồng cosine
+        similarities = util.pytorch_cos_sim(main_embedding, entity_embeddings).squeeze(0).tolist()
+        
+        # Tìm entity có độ tương đồng cao nhất
+        max_similarity_idx = similarities.index(max(similarities))
+        primary_entity = (entities[max_similarity_idx], data["classified_entities"][entities[max_similarity_idx]])
+        print(f"Primary entity based on similarity with '{main_entity}': {primary_entity[0]} (Similarity: {similarities[max_similarity_idx]:.2f})")
+
+    # Nếu không có main_entity hoặc không tìm thấy entity tương đồng, fallback về logic cũ
+    if not primary_entity and from_image:
+        priority_order = ["Person", "Animal", "PhysicalObject", "Context"]
+        for priority in priority_order:
+            for entity, entity_class in data["classified_entities"].items():
+                if entity_class == priority:
+                    primary_entity = (entity, entity_class)
+                    break
+            if primary_entity:
+                break
 
     # Xử lý thực thể
     for entity, entity_class in data["classified_entities"].items():
         var_name = f"{entity_class}Name_{entity.replace(' ', '_')}"
         entity_var = f'?{var_name}'
         entity_vars[entity] = entity_var
-        where_clauses.append(f"    {entity_var} a :{entity_class}.")
+        
+        # Xác định xem entity này có phải là primary_entity không
+        is_primary = primary_entity and primary_entity[0] == entity
+        
+        # Nếu là primary_entity hoặc không có from_image, đưa vào WHERE
+        clauses = where_clauses if is_primary or not from_image else optional_clauses
+        
+        clauses.append(f"    {entity_var} a :{entity_class}.")
         relation = ":hasContext" if entity_class == "Context" else ":contains"
-        where_clauses.append(f"    ?image {relation} {entity_var}.")
+        clauses.append(f"    ?image {relation} {entity_var}.")
 
-        # Lấy từ đồng nghĩa có ngữ cảnh
+        # Lấy từ đồng nghĩa
         synonyms = get_synonyms(entity, max_synonyms=10)
         synonym_var = f"?synonym_{var_name}"
-
         if synonyms:
             if entity not in synonyms:
                 synonyms.append(entity)
-            where_clauses.append(f"""    VALUES {synonym_var} {{ {' '.join(f'"{syn}"' for syn in synonyms)} }}""")
-            where_clauses.append(f"    OPTIONAL {{ {entity_var} :Wordnet {synonym_var}. }}")
+            clauses.append(f"""    VALUES {synonym_var} {{ {' '.join(f'"{syn}"' for syn in synonyms)} }}""")
+            clauses.append(f"    OPTIONAL {{ {entity_var} :Wordnet {synonym_var}. }}")
 
         if entity_class in ["PhysicalObject", "Animal", "Person"]:
-            where_clauses.append(f"    {entity_var} :ObjectName {synonym_var}.")
+            if from_image and not is_primary:
+                clauses.append(f"    OPTIONAL {{ {entity_var} :ObjectName {synonym_var}. }}")
+            else:
+                clauses.append(f"    {entity_var} :ObjectName {synonym_var}.")
         elif entity_class == "Context":
-            where_clauses.append(f"    {entity_var} :ContextName {synonym_var}.")
+            if from_image and not is_primary:
+                clauses.append(f"    OPTIONAL {{ {entity_var} :ContextName {synonym_var}. }}")
+            else:
+                clauses.append(f"    {entity_var} :ContextName {synonym_var}.")
 
+    # Xử lý thuộc tính
     for entity, attributes in data["classified_attributes"].items():
         if entity in entity_vars:
             entity_var = entity_vars[entity]
             for attr, values in attributes.items():
                 for value in values:
-                    # Lấy từ đồng nghĩa của giá trị thuộc tính
-                    attr_synonyms = get_synonyms(value,  max_synonyms=5)
+                    attr_synonyms = get_synonyms(value, max_synonyms=5)
                     attr_synonym_var = f"?synonym_{attr}_{value.replace(' ', '_')}"
-
                     if attr_synonyms:
-                        where_clauses.append(f"""    VALUES {attr_synonym_var} {{ {' '.join(f'"{syn}"' for syn in attr_synonyms)} }}""")
-                        where_clauses.append(f"    OPTIONAL {{ {entity_var} :{attr} {attr_synonym_var}. }}")
-                        where_clauses.append(f"    {entity_var} :{attr} \"{attr_synonym_var}\".")
+                        if value not in attr_synonyms:
+                            attr_synonyms.append(value)
+                        clauses.append(f"""    VALUES {attr_synonym_var} {{ {' '.join(f'"{syn}"' for syn in attr_synonyms)} }}""")
+                        if from_image:
+                            clauses.append(f"    OPTIONAL {{ {entity_var} :{attr} {attr_synonym_var}. }}")
+                        else:
+                            clauses.append(f"    {entity_var} :{attr} {attr_synonym_var}.")
                     else:
-                        where_clauses.append(f"    {entity_var} :{attr} \"{value}\".")
+                        if from_image:
+                            clauses.append(f"    OPTIONAL {{ {entity_var} :{attr} \"{value}\". }}")
+                        else:
+                            clauses.append(f"    {entity_var} :{attr} \"{value}\".")
 
+    # Xử lý quan hệ
     for relation in data["classified_relations"]:
         subj_var = entity_vars.get(relation["subject"])
         obj_var = entity_vars.get(relation["object"]) if relation["object"] != "-" else None
@@ -180,35 +229,49 @@ def generate_sparql_query(data):
 
         action_name = relation["predicate"].replace(" ", "_")
         action_var = f"?ActionName_{action_name}"
-        where_clauses.append(f"    {action_var} a :Action.")
-
-        # Lấy từ đồng nghĩa của quan hệ
-        synonyms = get_synonyms(relation['predicate'],  max_synonyms=5)
+        
+        clauses.append(f"    {action_var} a :Action.")
+        
+        synonyms = get_synonyms(relation['predicate'], max_synonyms=5)
         if synonyms:
-            if entity not in synonyms:
+            if relation["predicate"] not in synonyms:
                 synonyms.append(action_name)
             synonym_var = f"?synonym_ActionName_{action_name}"
-            where_clauses.append(f"""    VALUES {synonym_var} {{ {' '.join(f'"{syn}"' for syn in synonyms)} }}""")
-            where_clauses.append(f"    OPTIONAL {{ {action_var} :Wordnet {synonym_var}. }}")
-            where_clauses.append(f"    {action_var} :ActionName {synonym_var}.")
+            clauses.append(f"""    VALUES {synonym_var} {{ {' '.join(f'"{syn}"' for syn in synonyms)} }}""")
+            if from_image:
+                clauses.append(f"    OPTIONAL {{ {action_var} :Wordnet {synonym_var}. }}")
+            else:
+                clauses.append(f"    {action_var} :ActionName {synonym_var}.")
         else:
-            where_clauses.append(f"    {action_var} :ActionName \"{relation['predicate']}\".")
+            if from_image:
+                clauses.append(f"    OPTIONAL {{ {action_var} :ActionName \"{relation['predicate']}\". }}")
+            else:
+                clauses.append(f"    {action_var} :ActionName \"{relation['predicate']}\".")
 
-        where_clauses.append(f"    {action_var} :hasAgent {subj_var}.")
+        clauses.append(f"    {action_var} :hasAgent {subj_var}.")
         if obj_var:
-            where_clauses.append(f"    {action_var} :hasObject {obj_var}.")
+            clauses.append(f"    {action_var} :hasObject {obj_var}.")
 
+    # Điều kiện bắt buộc cho image
     where_clauses.append("    ?image a :Image;")
     where_clauses.append("           :ImageURL ?url.")
 
-    return select_clause + "\n".join(where_clauses) + "\n}"
+    # Kết hợp WHERE và OPTIONAL
+    query = select_clause + "\n".join(where_clauses)
+    if optional_clauses:
+        query += "\n    OPTIONAL {\n" + "\n".join(optional_clauses) + "\n    }"
+    query += "\n}"
+
+    return query
+
 
 
 @app.post("/generate_sparql")
-def generate_sparql(request: QueryRequest):
+def generate_sparql(
+    request: QueryRequest, 
+    from_image: bool = Query(default=False, description="Indicates if the input is from an image"),
+    main_entity: str = Query(default=None, description="Main entity recognized from image")):
     """API nhận câu truy vấn, xử lý NLP và sinh SPARQL"""
-    # start_time = time.time()
-
     parsed_data = processor.preprocess_text(request.text)
     classification_input = {
         "entities": list(parsed_data["entities"]),
@@ -217,9 +280,8 @@ def generate_sparql(request: QueryRequest):
     }
     
     classified_data = classifier.classify_input(classification_input)
-    sparql_query = "PREFIX : <http://www.semanticweb.org/asus/ontologies/2025/1/untitled-ontology-26#> " + generate_sparql_query(classified_data)
+    sparql_query = "PREFIX : <http://www.semanticweb.org/asus/ontologies/2025/1/untitled-ontology-26#> " + generate_sparql_query(classified_data, from_image, main_entity)
 
     return {
         "sparql_query": sparql_query,
-        # "execution_time": round(time.time() - start_time, 2)
     }

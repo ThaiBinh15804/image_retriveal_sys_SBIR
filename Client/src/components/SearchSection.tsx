@@ -54,7 +54,7 @@ export function SearchSection({ onSearch, sparqlQuery, description }: { onSearch
           onClick={() => setActiveTab("text")}
         >
           <SearchIcon className="w-4 h-4 mr-2" />
-          Text Search
+          Text Retrieval
         </button>
         <button
           className={`flex items-center px-6 py-3 -mb-px border-b-2 font-medium text-sm transition-all duration-300 hover:scale-105 ${
@@ -65,7 +65,7 @@ export function SearchSection({ onSearch, sparqlQuery, description }: { onSearch
           onClick={() => setActiveTab("image")}
         >
           <UploadIcon className="w-4 h-4 mr-2" />
-          Image Search
+          Image Retrieval
         </button>
       </div>
 
@@ -90,7 +90,7 @@ export function SearchSection({ onSearch, sparqlQuery, description }: { onSearch
               className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-3 rounded-xl hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:hover:scale-100 w-full md:w-auto md:self-end"
               disabled={!textQuery.trim()}
             >
-              Search with Text ✨
+              Retrieval with Text ✨
             </button>
           </form>
         ) : (
@@ -132,7 +132,7 @@ export function SearchSection({ onSearch, sparqlQuery, description }: { onSearch
               className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-3 rounded-xl hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:hover:scale-100 w-full md:w-auto md:self-end"
               disabled={!imageFile}
             >
-              Search with Image ✨
+              Retrieval with Image ✨
             </button>
 
             {/* Display description from parent */}

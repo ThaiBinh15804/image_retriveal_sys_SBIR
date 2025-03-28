@@ -30,6 +30,8 @@ export function App() {
   
     try {
       let sparql = type === "text" && typeof query === "string" ? query : "";
+      let fromImage = false;
+      let main_entity = "";
   
       if (type === "image" && query instanceof File) {
         const formData = new FormData();
@@ -42,10 +44,13 @@ export function App() {
         if (!data?.description) throw new Error("⚠️ Image analysis failed.");
         sparql = data.description;
         setDescription(data.description); // Lưu mô tả ảnh vào state
+        fromImage = true;
+        main_entity = data.main_entity;
         console.log(sparql)
       }
   
-      const { data: results } = await axios.post("http://localhost:2020/query", { body: sparql });
+      const { data: results } = await axios.post("http://localhost:2020/query", { body: sparql, from_image: fromImage, main_entity: main_entity });
+      console.log("từ anh: ",fromImage)
       console.log(results.bindings)
       console.log(results.sparql_query)
       setSparqlQuery(results.sparql_query); // Lưu SPARQL query vào state
