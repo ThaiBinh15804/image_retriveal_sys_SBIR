@@ -126,143 +126,153 @@ def get_synonyms(word: str, sentence: str = None, max_synonyms: int = 5, similar
 
 
 def generate_sparql_query(data, from_image=False, main_entity=None):
-    """Sinh truy vấn SPARQL từ dữ liệu phân loại, thay đổi điều kiện nếu input từ hình ảnh và so sánh với main_entity."""
+    """Sinh truy vấn SPARQL từ dữ liệu phân loại, ưu tiên thực thể khi input từ hình ảnh."""
     select_clause = "SELECT DISTINCT ?image ?url WHERE {\n"
     where_clauses = []
-    optional_clauses = []
     entity_vars = {}
 
-    # Tính độ tương đồng với main_entity nếu được cung cấp
-    primary_entity = None
-    if main_entity and data["classified_entities"]:
-        # Lấy danh sách các entity
-        entities = list(data["classified_entities"].keys())
-        
-        # Tính embedding cho main_entity và các entity
-        embeddings = model.encode([main_entity] + entities, convert_to_tensor=True)
-        main_embedding = embeddings[0]
-        entity_embeddings = embeddings[1:]
-        
-        # Tính độ tương đồng cosine
-        similarities = util.pytorch_cos_sim(main_embedding, entity_embeddings).squeeze(0).tolist()
-        
-        # Tìm entity có độ tương đồng cao nhất
-        max_similarity_idx = similarities.index(max(similarities))
-        primary_entity = (entities[max_similarity_idx], data["classified_entities"][entities[max_similarity_idx]])
-        print(f"Primary entity based on similarity with '{main_entity}': {primary_entity[0]} (Similarity: {similarities[max_similarity_idx]:.2f})")
+    if from_image and main_entity:
+        # Xử lý trường hợp input từ hình ảnh
+        # Bước 1: Xác định các thực thể bắt buộc từ classified_entities
+        for entity, entity_class in data["classified_entities"].items():
+            var_name = f"{entity_class}Name_{entity.replace(' ', '_')}"
+            entity_var = f'?{var_name}'
+            entity_vars[entity] = entity_var
 
-    # Nếu không có main_entity hoặc không tìm thấy entity tương đồng, fallback về logic cũ
-    if not primary_entity and from_image:
-        priority_order = ["Person", "Animal", "PhysicalObject", "Context"]
-        for priority in priority_order:
-            for entity, entity_class in data["classified_entities"].items():
-                if entity_class == priority:
-                    primary_entity = (entity, entity_class)
-                    break
-            if primary_entity:
-                break
+            # Điều kiện bắt buộc cho thực thể
+            where_clauses.append(f"    {entity_var} a :{entity_class} .")
+            relation = ":hasContext" if entity_class == "Context" else ":contains"
+            where_clauses.append(f"    ?image {relation} {entity_var} .")
 
-    # Xử lý thực thể
-    for entity, entity_class in data["classified_entities"].items():
-        var_name = f"{entity_class}Name_{entity.replace(' ', '_')}"
-        entity_var = f'?{var_name}'
-        entity_vars[entity] = entity_var
-        
-        # Xác định xem entity này có phải là primary_entity không
-        is_primary = primary_entity and primary_entity[0] == entity
-        
-        # Nếu là primary_entity hoặc không có from_image, đưa vào WHERE
-        clauses = where_clauses if is_primary or not from_image else optional_clauses
-        
-        clauses.append(f"    {entity_var} a :{entity_class}.")
-        relation = ":hasContext" if entity_class == "Context" else ":contains"
-        clauses.append(f"    ?image {relation} {entity_var}.")
+            # Lấy từ đồng nghĩa
+            synonyms = get_synonyms(entity, max_synonyms=10)
+            synonym_var = f"?synonym_{var_name}"
+            if synonyms:
+                if entity not in synonyms:
+                    synonyms.append(entity)
+                where_clauses.append(f"    VALUES {synonym_var} {{ {' '.join(f'\"{syn}\"' for syn in synonyms)} }}")
+                where_clauses.append(f"    OPTIONAL {{ {entity_var} :Wordnet {synonym_var} }}")
 
-        # Lấy từ đồng nghĩa
-        synonyms = get_synonyms(entity, max_synonyms=10)
-        synonym_var = f"?synonym_{var_name}"
-        if synonyms:
-            if entity not in synonyms:
-                synonyms.append(entity)
-            clauses.append(f"""    VALUES {synonym_var} {{ {' '.join(f'"{syn}"' for syn in synonyms)} }}""")
-            clauses.append(f"    OPTIONAL {{ {entity_var} :Wordnet {synonym_var}. }}")
+                # Xử lý tên thực thể
+                if entity_class in ["PhysicalObject", "Animal", "Person"]:
+                    where_clauses.append(f"    {entity_var} :ObjectName {synonym_var} .")
+                elif entity_class == "Context":
+                    where_clauses.append(f"    {entity_var} :ContextName {synonym_var} .")
 
-        if entity_class in ["PhysicalObject", "Animal", "Person"]:
-            if from_image and not is_primary:
-                clauses.append(f"    OPTIONAL {{ {entity_var} :ObjectName {synonym_var}. }}")
-            else:
-                clauses.append(f"    {entity_var} :ObjectName {synonym_var}.")
-        elif entity_class == "Context":
-            if from_image and not is_primary:
-                clauses.append(f"    OPTIONAL {{ {entity_var} :ContextName {synonym_var}. }}")
-            else:
-                clauses.append(f"    {entity_var} :ContextName {synonym_var}.")
-
-    # Xử lý thuộc tính
-    for entity, attributes in data["classified_attributes"].items():
-        if entity in entity_vars:
-            entity_var = entity_vars[entity]
-            for attr, values in attributes.items():
-                for value in values:
-                    attr_synonyms = get_synonyms(value, max_synonyms=5)
-                    attr_synonym_var = f"?synonym_{attr}_{value.replace(' ', '_')}"
-                    if attr_synonyms:
-                        if value not in attr_synonyms:
-                            attr_synonyms.append(value)
-                        clauses.append(f"""    VALUES {attr_synonym_var} {{ {' '.join(f'"{syn}"' for syn in attr_synonyms)} }}""")
-                        if from_image:
-                            clauses.append(f"    OPTIONAL {{ {entity_var} :{attr} {attr_synonym_var}. }}")
+        # Bước 2: Xử lý các thuộc tính (điều kiện phụ)
+        for entity, attributes in data["classified_attributes"].items():
+            if entity in entity_vars:
+                entity_var = entity_vars[entity]
+                for attr, values in attributes.items():
+                    for value in values:
+                        attr_synonyms = get_synonyms(value, max_synonyms=5)
+                        attr_synonym_var = f"?synonym_{attr}_{value.replace(' ', '_')}"
+                        if attr_synonyms:
+                            where_clauses.append(f"    OPTIONAL {{")
+                            where_clauses.append(f"        VALUES {attr_synonym_var} {{ {' '.join(f'\"{syn}\"' for syn in attr_synonyms)} }}")
+                            where_clauses.append(f"        {entity_var} :{attr} {attr_synonym_var} .")
+                            where_clauses.append(f"    }}")
                         else:
-                            clauses.append(f"    {entity_var} :{attr} {attr_synonym_var}.")
-                    else:
-                        if from_image:
-                            clauses.append(f"    OPTIONAL {{ {entity_var} :{attr} \"{value}\". }}")
-                        else:
-                            clauses.append(f"    {entity_var} :{attr} \"{value}\".")
+                            where_clauses.append(f"    OPTIONAL {{ {entity_var} :{attr} \"{value}\" }}")
 
-    # Xử lý quan hệ
-    for relation in data["classified_relations"]:
-        subj_var = entity_vars.get(relation["subject"])
-        obj_var = entity_vars.get(relation["object"]) if relation["object"] != "-" else None
-        if not subj_var:
-            continue
+        # Bước 3: Xử lý các quan hệ (điều kiện phụ)
+        for relation in data["classified_relations"]:
+            subj_var = entity_vars.get(relation["subject"])
+            obj_var = entity_vars.get(relation["object"]) if relation["object"] != "-" else None
+            if not subj_var:
+                continue
 
-        action_name = relation["predicate"].replace(" ", "_")
-        action_var = f"?ActionName_{action_name}"
-        
-        clauses.append(f"    {action_var} a :Action.")
-        
-        synonyms = get_synonyms(relation['predicate'], max_synonyms=5)
-        if synonyms:
-            if relation["predicate"] not in synonyms:
-                synonyms.append(action_name)
+            action_name = relation["predicate"].replace(" ", "_")
+            action_var = f"?ActionName_{action_name}"
+            where_clauses.append(f"    OPTIONAL {{")
+            where_clauses.append(f"        {action_var} a :Action .")
+
+            synonyms = get_synonyms(relation['predicate'], max_synonyms=5)
             synonym_var = f"?synonym_ActionName_{action_name}"
-            clauses.append(f"""    VALUES {synonym_var} {{ {' '.join(f'"{syn}"' for syn in synonyms)} }}""")
-            if from_image:
-                clauses.append(f"    OPTIONAL {{ {action_var} :Wordnet {synonym_var}. }}")
+            if synonyms:
+                if relation["predicate"] not in synonyms:
+                    synonyms.append(relation["predicate"])
+                where_clauses.append(f"        VALUES {synonym_var} {{ {' '.join(f'\"{syn}\"' for syn in synonyms)} }}")
+                where_clauses.append(f"        OPTIONAL {{ {action_var} :Wordnet {synonym_var} }}")
+                where_clauses.append(f"        {action_var} :ActionName {synonym_var} .")
             else:
-                clauses.append(f"    {action_var} :ActionName {synonym_var}.")
-        else:
-            if from_image:
-                clauses.append(f"    OPTIONAL {{ {action_var} :ActionName \"{relation['predicate']}\". }}")
+                where_clauses.append(f"        {action_var} :ActionName \"{relation['predicate']}\" .")
+
+            where_clauses.append(f"        {action_var} :hasAgent {subj_var} .")
+            if obj_var:
+                where_clauses.append(f"        {action_var} :hasObject {obj_var} .")
+            where_clauses.append(f"    }}")
+
+        # Điều kiện bắt buộc cho image
+        where_clauses.append("    ?image a :Image ;")
+        where_clauses.append("           :ImageURL ?url .")
+
+    else:
+        # Giữ nguyên logic cũ cho trường hợp from_image=False
+        for entity, entity_class in data["classified_entities"].items():
+            var_name = f"{entity_class}Name_{entity.replace(' ', '_')}"
+            entity_var = f'?{var_name}'
+            entity_vars[entity] = entity_var
+            where_clauses.append(f"    {entity_var} a :{entity_class} .")
+            relation = ":hasContext" if entity_class == "Context" else ":contains"
+            where_clauses.append(f"    ?image {relation} {entity_var} .")
+
+            synonyms = get_synonyms(entity, max_synonyms=10)
+            synonym_var = f"?synonym_{var_name}"
+            if synonyms:
+                if entity not in synonyms:
+                    synonyms.append(entity)
+                where_clauses.append(f"    VALUES {synonym_var} {{ {' '.join(f'\"{syn}\"' for syn in synonyms)} }}")
+                where_clauses.append(f"    OPTIONAL {{ {entity_var} :Wordnet {synonym_var} }}")
+
+            if entity_class in ["PhysicalObject", "Animal", "Person"]:
+                where_clauses.append(f"    {entity_var} :ObjectName {synonym_var} .")
+            elif entity_class == "Context":
+                where_clauses.append(f"    {entity_var} :ContextName {synonym_var} .")
+
+        for entity, attributes in data["classified_attributes"].items():
+            if entity in entity_vars:
+                entity_var = entity_vars[entity]
+                for attr, values in attributes.items():
+                    for value in values:
+                        attr_synonyms = get_synonyms(value, max_synonyms=5)
+                        attr_synonym_var = f"?synonym_{attr}_{value.replace(' ', '_')}"
+                        if attr_synonyms:
+                            where_clauses.append(f"    VALUES {attr_synonym_var} {{ {' '.join(f'\"{syn}\"' for syn in attr_synonyms)} }}")
+                            where_clauses.append(f"    OPTIONAL {{ {entity_var} :{attr} {attr_synonym_var} }}")
+                            where_clauses.append(f"    {entity_var} :{attr} \"{attr_synonym_var}\" .")
+                        else:
+                            where_clauses.append(f"    {entity_var} :{attr} \"{value}\" .")
+
+        for relation in data["classified_relations"]:
+            subj_var = entity_vars.get(relation["subject"])
+            obj_var = entity_vars.get(relation["object"]) if relation["object"] != "-" else None
+            if not subj_var:
+                continue
+
+            action_name = relation["predicate"].replace(" ", "_")
+            action_var = f"?ActionName_{action_name}"
+            where_clauses.append(f"    {action_var} a :Action .")
+
+            synonyms = get_synonyms(relation['predicate'], max_synonyms=5)
+            if synonyms:
+                if relation["predicate"] not in synonyms:
+                    synonyms.append(action_name)
+                synonym_var = f"?synonym_ActionName_{action_name}"
+                where_clauses.append(f"    VALUES {synonym_var} {{ {' '.join(f'\"{syn}\"' for syn in synonyms)} }}")
+                where_clauses.append(f"    OPTIONAL {{ {action_var} :Wordnet {synonym_var} }}")
+                where_clauses.append(f"    {action_var} :ActionName {synonym_var} .")
             else:
-                clauses.append(f"    {action_var} :ActionName \"{relation['predicate']}\".")
+                where_clauses.append(f"    {action_var} :ActionName \"{relation['predicate']}\" .")
 
-        clauses.append(f"    {action_var} :hasAgent {subj_var}.")
-        if obj_var:
-            clauses.append(f"    {action_var} :hasObject {obj_var}.")
+            where_clauses.append(f"    {action_var} :hasAgent {subj_var} .")
+            if obj_var:
+                where_clauses.append(f"    {action_var} :hasObject {obj_var} .")
 
-    # Điều kiện bắt buộc cho image
-    where_clauses.append("    ?image a :Image;")
-    where_clauses.append("           :ImageURL ?url.")
+        where_clauses.append("    ?image a :Image ;")
+        where_clauses.append("           :ImageURL ?url .")
 
-    # Kết hợp WHERE và OPTIONAL
-    query = select_clause + "\n".join(where_clauses)
-    if optional_clauses:
-        query += "\n    OPTIONAL {\n" + "\n".join(optional_clauses) + "\n    }"
-    query += "\n}"
-
-    return query
+    return select_clause + "\n".join(where_clauses) + "\n}"
 
 
 

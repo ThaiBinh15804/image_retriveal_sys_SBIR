@@ -64,7 +64,7 @@ def generate_description(image: Image.Image) -> str:
     output = blip_model.generate(
         **inputs, 
         max_length=50,  # Giới hạn độ dài mô tả
-        num_beams=7,  # Beam search để tăng độ chính xác
+        num_beams=2,  # Beam search để tăng độ chính xác
         repetition_penalty=1.2
     )
 
