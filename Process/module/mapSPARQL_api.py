@@ -150,7 +150,7 @@ def generate_sparql_query(data, from_image=False, main_entity=None):
             if synonyms:
                 if entity not in synonyms:
                     synonyms.append(entity)
-                where_clauses.append(f"    VALUES {synonym_var} {{ {' '.join(f'\"{syn}\"' for syn in synonyms)} }}")
+                where_clauses.append(f"""    VALUES {synonym_var} {{ {' '.join(f'"{syn}"' for syn in synonyms)} }}""")
                 where_clauses.append(f"    OPTIONAL {{ {entity_var} :Wordnet {synonym_var} }}")
 
                 # Xử lý tên thực thể
@@ -169,7 +169,7 @@ def generate_sparql_query(data, from_image=False, main_entity=None):
                         attr_synonym_var = f"?synonym_{attr}_{value.replace(' ', '_')}"
                         if attr_synonyms:
                             where_clauses.append(f"    OPTIONAL {{")
-                            where_clauses.append(f"        VALUES {attr_synonym_var} {{ {' '.join(f'\"{syn}\"' for syn in attr_synonyms)} }}")
+                            where_clauses.append(f"""        VALUES {attr_synonym_var} {{ {' '.join(f'"{syn}"' for syn in attr_synonyms)} }}""")
                             where_clauses.append(f"        {entity_var} :{attr} {attr_synonym_var} .")
                             where_clauses.append(f"    }}")
                         else:
@@ -192,7 +192,7 @@ def generate_sparql_query(data, from_image=False, main_entity=None):
             if synonyms:
                 if relation["predicate"] not in synonyms:
                     synonyms.append(relation["predicate"])
-                where_clauses.append(f"        VALUES {synonym_var} {{ {' '.join(f'\"{syn}\"' for syn in synonyms)} }}")
+                where_clauses.append(f"""        VALUES {synonym_var} {{ {' '.join(f'"{syn}"' for syn in synonyms)} }}""")
                 where_clauses.append(f"        OPTIONAL {{ {action_var} :Wordnet {synonym_var} }}")
                 where_clauses.append(f"        {action_var} :ActionName {synonym_var} .")
             else:
@@ -222,7 +222,7 @@ def generate_sparql_query(data, from_image=False, main_entity=None):
             if synonyms:
                 if entity not in synonyms:
                     synonyms.append(entity)
-                where_clauses.append(f"    VALUES {synonym_var} {{ {' '.join(f'\"{syn}\"' for syn in synonyms)} }}")
+                where_clauses.append(f"""    VALUES {synonym_var} {{ {' '.join(f'"{syn}"' for syn in synonyms)} }}""")
                 where_clauses.append(f"    OPTIONAL {{ {entity_var} :Wordnet {synonym_var} }}")
 
             if entity_class in ["PhysicalObject", "Animal", "Person"]:
@@ -238,7 +238,7 @@ def generate_sparql_query(data, from_image=False, main_entity=None):
                         attr_synonyms = get_synonyms(value, max_synonyms=5)
                         attr_synonym_var = f"?synonym_{attr}_{value.replace(' ', '_')}"
                         if attr_synonyms:
-                            where_clauses.append(f"    VALUES {attr_synonym_var} {{ {' '.join(f'\"{syn}\"' for syn in attr_synonyms)} }}")
+                            where_clauses.append(f"""    VALUES {attr_synonym_var} {{ {' '.join(f'"{syn}"' for syn in attr_synonyms)} }}""")
                             where_clauses.append(f"    OPTIONAL {{ {entity_var} :{attr} {attr_synonym_var} }}")
                             where_clauses.append(f"    {entity_var} :{attr} \"{attr_synonym_var}\" .")
                         else:
@@ -259,7 +259,7 @@ def generate_sparql_query(data, from_image=False, main_entity=None):
                 if relation["predicate"] not in synonyms:
                     synonyms.append(action_name)
                 synonym_var = f"?synonym_ActionName_{action_name}"
-                where_clauses.append(f"    VALUES {synonym_var} {{ {' '.join(f'\"{syn}\"' for syn in synonyms)} }}")
+                where_clauses.append(f"""    VALUES {synonym_var} {{ {' '.join(f'"{syn}"' for syn in synonyms)} }}""")
                 where_clauses.append(f"    OPTIONAL {{ {action_var} :Wordnet {synonym_var} }}")
                 where_clauses.append(f"    {action_var} :ActionName {synonym_var} .")
             else:
