@@ -238,9 +238,11 @@ def generate_sparql_query(data, from_image=False, main_entity=None):
                         attr_synonyms = get_synonyms(value, max_synonyms=5)
                         attr_synonym_var = f"?synonym_{attr}_{value.replace(' ', '_')}"
                         if attr_synonyms:
+                            if value not in attr_synonyms:
+                                attr_synonyms.append(value)
                             where_clauses.append(f"""    VALUES {attr_synonym_var} {{ {' '.join(f'"{syn}"' for syn in attr_synonyms)} }}""")
                             where_clauses.append(f"    OPTIONAL {{ {entity_var} :{attr} {attr_synonym_var} }}")
-                            where_clauses.append(f"    {entity_var} :{attr} \"{attr_synonym_var}\" .")
+                            where_clauses.append(f"    {entity_var} :{attr} {attr_synonym_var} .")
                         else:
                             where_clauses.append(f"    {entity_var} :{attr} \"{value}\" .")
 
