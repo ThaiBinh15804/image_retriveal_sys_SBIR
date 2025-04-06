@@ -5,14 +5,8 @@ import axios from "axios";
 import { gapi } from "gapi-script";
 
 export type imageQueryType = {
-  image: {
-    type: string;
-    value: string;
-  };
-  url: {
-    type: string;
-    value: string;
-  };
+  image: { type: string; value: string };
+  url: { type: string; value: string };
 };
 
 export function App() {
@@ -22,10 +16,9 @@ export function App() {
   const [sparqlQuery, setSparqlQuery] = useState("");
   const [description, setDescription] = useState("");
   const [selectedImage, setSelectedImage] = useState<imageQueryType | null>(null);
-  const [imageUrl, setImageUrl] = useState<string>(""); // State để lưu URL ảnh từ API
+  const [imageUrl, setImageUrl] = useState<string>("");
 
-  // Thông tin API Key từ Google Cloud Console
-  const API_KEY = "AIzaSyBb04xOt0F3gwZi1zc_bHNiGtqhPdj8TN8"; // Thay bằng API key của bạn
+  const API_KEY = "YOUR_API_KEY_HERE"; // Thay bằng API key của bạn
 
   // Khởi tạo Google API Client
   useEffect(() => {
@@ -47,20 +40,28 @@ export function App() {
     gapi.load("client", initClient);
   }, []);
 
-  // Hàm lấy URL ảnh từ Google Drive API
-  const fetchImageUrl = async (fileId: string) => {
-    try {
-      const response = await gapi.client.drive.files.get({
-        fileId: fileId,
-        fields: "webContentLink",
-      });
-      setImageUrl(response.result.webContentLink);
-    } catch (err) {
-      // Xử lý lỗi linh hoạt
-      const errorMessage = err instanceof Error ? err.message : JSON.stringify(err);
-      setError("Không thể lấy URL ảnh: " + errorMessage);
-    }
-  };
+  // // Hàm lấy URL ảnh từ Google Drive API
+  // const fetchImageUrl = async (fileId: string) => {
+  //   try {
+  //     const response = await gapi.client.drive.files.get({
+  //       fileId: fileId,
+  //       fields: "webContentLink",
+  //     });
+  //     setImageUrl(response.result.webContentLink);
+  //   } catch (err) {
+  //     // Xử lý lỗi linh hoạt
+  //     const errorMessage = err instanceof Error ? err.message : JSON.stringify(err);
+  //     setError("Không thể lấy URL ảnh: " + errorMessage);
+  //   }
+  // };
+
+  // // Khi chọn ảnh, gọi API để lấy URL
+  // useEffect(() => {
+  //   if (selectedImage) {
+  //     const fileId = selectedImage.url.value.split("id=")[1];
+  //     fetchImageUrl(fileId);
+  //   }
+  // }, [selectedImage]);
 
   const handleSearch = async (query: string | File, type: string) => {
     setIsLoading(true);
@@ -102,21 +103,12 @@ export function App() {
     }
   };
 
-  // Khi chọn ảnh, gọi API để lấy URL
-  useEffect(() => {
-    if (selectedImage) {
-      const fileId = selectedImage.url.value.split("id=")[1];
-      fetchImageUrl(fileId);
-    }
-  }, [selectedImage]);
-
   return (
     <main className="min-h-screen w-full bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50">
       <header className="bg-gradient-to-r from-purple-600 to-pink-600 py-6 px-6 shadow-lg">
         <div className="container mx-auto">
           <h1 className="text-3xl font-bold text-white tracking-tight">
-            Image Search
-            <span className="text-yellow-300">.</span>
+            Image Search<span className="text-yellow-300">.</span>
           </h1>
           <p className="text-purple-100 mt-2">Find the perfect image in seconds ✨</p>
         </div>
@@ -127,7 +119,6 @@ export function App() {
         <ResultsSection results={searchResults} isLoading={isLoading} error={error} onSelectImage={setSelectedImage} />
       </div>
 
-      {/* Modal hiển thị ảnh */}
       {selectedImage && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
           <div className="relative bg-white rounded-lg shadow-lg p-4 max-w-4xl w-full">
@@ -139,9 +130,10 @@ export function App() {
             </button>
 
             <div className="flex justify-center items-center w-full">
-              {imageUrl ? (
+              {selectedImage ? (
                 <img
-                  src={imageUrl}
+                  // src={imageUrl}
+                  src={`https://drive.google.com/thumbnail?id=${selectedImage.url.value.split("id=")[1]}&sz=w1000`}
                   alt={selectedImage.image.value}
                   className="max-w-full max-h-[80vh] object-contain rounded-md"
                 />
