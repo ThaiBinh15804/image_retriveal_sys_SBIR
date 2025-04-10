@@ -16,7 +16,7 @@ export function App() {
   const [sparqlQuery, setSparqlQuery] = useState("");
   const [description, setDescription] = useState("");
   const [selectedImage, setSelectedImage] = useState<imageQueryType | null>(null);
-  const [imageUrl, setImageUrl] = useState<string>("");
+  // const [imageUrl, setImageUrl] = useState<string>("");
 
   const API_KEY = "YOUR_API_KEY_HERE"; // Thay bằng API key của bạn
 
