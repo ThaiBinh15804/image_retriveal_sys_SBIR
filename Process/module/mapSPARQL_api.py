@@ -136,23 +136,28 @@ def generate_sparql_query(data, from_image=False, main_entity=None):
     if from_image and main_entity:
         # Xử lý trường hợp input từ hình ảnh
 
-        # Bước 1: Sắp xếp thực thể theo thứ tự ưu tiên
-        sorted_entities = {}
-        for entity, entity_class in data["classified_entities"].items():
-            if entity_class in priority_order:
-                sorted_entities[entity] = entity_class
+        parsed_data = processor.preprocess_text(main_entity)
+        classification_input = {
+            "entities": list(parsed_data["entities"]),
+            "attributes": parsed_data["attributes"],
+            "relations": parsed_data["relations"],
+        }
 
-        # Sắp xếp theo thứ tự ưu tiên
+        # Bước 2: Phân loại thực thể bằng EntityClassifier
+        classified_data = classifier.classify_input(classification_input)
+        classified_entities = classified_data["classified_entities"]
+
+        # Bước 3: Sắp xếp thực thể theo thứ tự ưu tiên
         ordered_entities = []
         for cls in priority_order:
-            for entity, entity_class in sorted_entities.items():
+            for entity, entity_class in classified_entities.items():
                 if entity_class == cls:
                     ordered_entities.append((entity, entity_class))
 
         if not ordered_entities:
             ordered_entities.append((main_entity, "PhysicalObject"))  # Mặc định nếu không tìm thấy
 
-        # Bước 2: Thực thể đầu tiên là điều kiện chính
+        # Bước 4: Thực thể đầu tiên là điều kiện chính
         primary_entity, primary_class = ordered_entities[0]
         primary_var_name = f"{primary_class}Name_{primary_entity.replace(' ', '_')}"
         primary_entity_var = f'?{primary_var_name}'
@@ -177,7 +182,7 @@ def generate_sparql_query(data, from_image=False, main_entity=None):
             elif primary_class == "Context":
                 where_clauses.append(f"    {primary_entity_var} :ContextName {synonym_var} .")
 
-        # Bước 3: Các thực thể còn lại là điều kiện phụ
+        # Bước 5: Các thực thể còn lại là điều kiện phụ
         for entity, entity_class in ordered_entities[1:]:
             var_name = f"{entity_class}Name_{entity.replace(' ', '_')}"
             entity_var = f'?{var_name}'

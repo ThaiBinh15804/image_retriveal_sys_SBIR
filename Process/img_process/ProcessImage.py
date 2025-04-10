@@ -82,13 +82,13 @@ async def analyze_image(file: UploadFile = File(...)):
     image = Image.open(file.file).convert("RGB")
 
     # Sinh mô tả ảnh
-    description = generate_description(image)
+    # description = generate_description(image)
 
     # Nhận diện thực thể chính
     main_entity = detect_main_entity(image)
 
     return {
         "filename": file.filename,
-        "description": description,
+        "description": main_entity,
         "main_entity": main_entity,
     }
