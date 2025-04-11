@@ -189,10 +189,14 @@ def generate_sparql_query(data, from_image=False, main_entity=None):
 
         # Tập từ đồng nghĩa cho thực thể chính, bao gồm cặp tương đồng
         synonyms = get_synonyms(primary_entity, max_synonyms=10)
+        
         if primary_entity in pair_similarities:
             desc_ent = pair_similarities[primary_entity][0]
-            if desc_ent not in synonyms:
-                synonyms.append(desc_ent)
+            if desc_ent: 
+                synonyms.extend(get_synonyms(desc_ent, max_synonyms=10))
+                if desc_ent not in synonyms:
+                    synonyms.append(desc_ent)
+        synonyms.append(primary_entity)
         synonym_var = f"?synonym_{primary_var_name}"
         if synonyms:
             where_clauses.append(f"""    VALUES {synonym_var} {{ {' '.join(f'"{syn}"' for syn in synonyms)} }}""")
