@@ -196,7 +196,8 @@ def generate_sparql_query(data, from_image=False, main_entity=None):
                 synonyms.extend(get_synonyms(desc_ent, max_synonyms=10))
                 if desc_ent not in synonyms:
                     synonyms.append(desc_ent)
-        synonyms.append(primary_entity)
+        if primary_entity not in synonyms:
+            synonyms.append(primary_entity)
         synonym_var = f"?synonym_{primary_var_name}"
         if synonyms:
             where_clauses.append(f"""    VALUES {synonym_var} {{ {' '.join(f'"{syn}"' for syn in synonyms)} }}""")
