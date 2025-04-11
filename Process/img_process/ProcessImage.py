@@ -33,15 +33,23 @@ blip_processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning
 blip_model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-large", local_files_only=True).to(device)
 
 def detect_main_entity(image: Image.Image):
-    """Dùng YOLOv8 để nhận diện thực thể chính và trả về tên class"""
+    """Dùng YOLOv8 để nhận diện tất cả các thực thể và trả về chuỗi tên class dạng 'a, b, c'"""
     results = yolo_model(image)
     
     if len(results) > 0 and len(results[0].boxes) > 0:
         boxes = results[0].boxes
-        main_box = max(boxes, key=lambda b: b.conf)  # Chọn box có độ tin cậy cao nhất
-        class_name = yolo_model.names[int(main_box.cls)]  # Lấy tên class
-        return class_name
-    return None
+        main_entity = []  # Danh sách để lưu tất cả tên lớp
+        
+        # Duyệt qua tất cả các hộp giới hạn
+        for box in boxes:
+            class_id = int(box.cls)  # Lấy ID lớp của đối tượng
+            class_name = yolo_model.names[class_id]  # Lấy tên lớp từ ID
+            main_entity.append(class_name)  # Thêm tên lớp vào danh sách
+        
+        # Chuyển danh sách thành chuỗi, nối bằng ", "
+        return ", ".join(main_entity)
+    return ""
+
 
 def extract_key_phrases(text):
     """Trích xuất các từ quan trọng từ mô tả"""
@@ -82,13 +90,13 @@ async def analyze_image(file: UploadFile = File(...)):
     image = Image.open(file.file).convert("RGB")
 
     # Sinh mô tả ảnh
-    # description = generate_description(image)
+    description = generate_description(image)
 
     # Nhận diện thực thể chính
     main_entity = detect_main_entity(image)
 
     return {
         "filename": file.filename,
-        "description": main_entity,
+        "description": description,
         "main_entity": main_entity,
     }
