@@ -16,13 +16,18 @@ export function App() {
   const [sparqlQuery, setSparqlQuery] = useState("");
   const [description, setDescription] = useState("");
   const [selectedImage, setSelectedImage] = useState<imageQueryType | null>(null);
-  // const [imageUrl, setImageUrl] = useState<string>("");
+  const [imageLoadError, setImageLoadError] = useState<string>("");
 
-  const API_KEY = "YOUR_API_KEY_HERE"; // Thay bằng API key của bạn
+  const API_KEY = "AIzaSyAtLWj5hAYsUO0lcGtYt8_Xibspzez0dgY"; // Đã thay bằng API key hợp lệ
 
   // Khởi tạo Google API Client
   useEffect(() => {
     const initClient = () => {
+      if (!gapi.client) {
+        setError("Google API Client không tải được. Kiểm tra gapi-script.");
+        return;
+      }
+
       gapi.client
         .init({
           apiKey: API_KEY,
@@ -32,40 +37,74 @@ export function App() {
           console.log("Google API Client đã sẵn sàng");
         })
         .catch((err: unknown) => {
-          // Xử lý lỗi linh hoạt
           const errorMessage = err instanceof Error ? err.message : JSON.stringify(err);
-          setError("Không thể khởi tạo Google API Client: " + errorMessage);
+          setError(`Không thể khởi tạo Google API Client: ${errorMessage}`);
+          console.error("Chi tiết lỗi khởi tạo:", err);
         });
     };
-    gapi.load("client", initClient);
+
+    if (typeof gapi !== "undefined") {
+      gapi.load("client", initClient);
+    } else {
+      setError("Thư viện gapi không tải được. Kiểm tra môi trường hoặc kết nối.");
+    }
   }, []);
 
-  // // Hàm lấy URL ảnh từ Google Drive API
-  // const fetchImageUrl = async (fileId: string) => {
-  //   try {
-  //     const response = await gapi.client.drive.files.get({
-  //       fileId: fileId,
-  //       fields: "webContentLink",
-  //     });
-  //     setImageUrl(response.result.webContentLink);
-  //   } catch (err) {
-  //     // Xử lý lỗi linh hoạt
-  //     const errorMessage = err instanceof Error ? err.message : JSON.stringify(err);
-  //     setError("Không thể lấy URL ảnh: " + errorMessage);
-  //   }
-  // };
+  // Hàm kiểm tra trạng thái file qua Google Drive API
+  const checkFileStatus = async (fileId: string) => {
+    try {
+      const response = await gapi.client.drive.files.get({
+        fileId: fileId,
+        fields: "id, name, mimeType, webContentLink, error",
+      });
+      return { success: true, data: response.result };
+    } catch (err: any) {
+      const errorDetails = err.result?.error || { message: "Unknown error", code: "N/A" };
+      return {
+        success: false,
+        error: `Google Drive API Error: ${errorDetails.message} (Code: ${errorDetails.code})`,
+      };
+    }
+  };
 
-  // // Khi chọn ảnh, gọi API để lấy URL
-  // useEffect(() => {
-  //   if (selectedImage) {
-  //     const fileId = selectedImage.url.value.split("id=")[1];
-  //     fetchImageUrl(fileId);
-  //   }
-  // }, [selectedImage]);
+  // Tách file ID từ URL
+  const extractFileId = (url: string) => {
+    const match = url.match(/id=([^&]+)/);
+    return match ? match[1] : null;
+  };
+
+  // Xử lý lỗi tải ảnh
+  const handleImageError = async (url: string) => {
+    const fileId = extractFileId(url);
+    if (!fileId) {
+      const errorMsg = "Application Error: Không thể tách file ID từ URL.";
+      setImageLoadError(errorMsg);
+      console.error(errorMsg, "URL:", url);
+      return;
+    }
+
+    console.log(`Image load failed for fileId: ${fileId}`);
+    
+    const fileStatus = await checkFileStatus(fileId);
+    if (!fileStatus.success) {
+      setImageLoadError(fileStatus.error || "Unknown error occurred.");
+      console.error(fileStatus.error || "Unknown error occurred.");
+      return;
+    }
+
+    const { data } = fileStatus;
+    console.log("File details:", data);
+    if (!data.webContentLink) {
+      setImageLoadError("Application Error: File exists but no webContentLink available.");
+    } else {
+      setImageLoadError("Network Error: File exists but failed to load. Possible CORS or network issue.");
+    }
+  };
 
   const handleSearch = async (query: string | File, type: string) => {
     setIsLoading(true);
     setError("");
+    setImageLoadError("");
 
     try {
       let sparql = type === "text" && typeof query === "string" ? query : "";
@@ -129,14 +168,20 @@ export function App() {
               ×
             </button>
 
-            <div className="flex justify-center items-center w-full">
+            <div className="flex flex-col justify-center items-center w-full">
               {selectedImage ? (
-                <img
-                  // src={imageUrl}
-                  src={`https://drive.google.com/thumbnail?id=${selectedImage.url.value.split("id=")[1]}&sz=w1000`}
-                  alt={selectedImage.image.value}
-                  className="max-w-full max-h-[80vh] object-contain rounded-md"
-                />
+                <>
+                  <img
+                    src={`https://drive.google.com/thumbnail?id=${extractFileId(selectedImage.url.value)}&sz=w1000`}
+                    alt={selectedImage.image.value}
+                    className="max-w-full max-h-[80vh] object-contain rounded-md"
+                    onError={() => handleImageError(selectedImage.url.value)}
+                    onLoad={() => console.log(`Image loaded successfully: ${selectedImage.url.value}`)}
+                  />
+                  {imageLoadError && (
+                    <p className="text-red-500 mt-2 text-center">{imageLoadError}</p>
+                  )}
+                </>
               ) : (
                 <p>Đang tải ảnh...</p>
               )}
