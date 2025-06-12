@@ -30,9 +30,27 @@ export function App() {
     return null;
   };
 
-  // Xử lý lỗi tải ảnh: chỉ hiện thông báo đơn giản
-  const handleImageError = () => {
-    setImageLoadError("Không thể tải ảnh. File có thể không công khai hoặc đã bị xóa.");
+  // Xử lý lỗi tải ảnh: in ra nguyên nhân cụ thể từ Google Drive nếu có thể
+  const handleImageError = async () => {
+    const url = selectedImage?.url.value || "";
+    const fileId = extractFileId(url);
+    const directLink = fileId ? `https://lh3.googleusercontent.com/d/${fileId}=w1000` : "";
+    if (!fileId) {
+      setImageLoadError("Không lấy được fileId từ link ảnh. Link không đúng định dạng hoặc thiếu thông tin.");
+      return;
+    }
+    try {
+      const response = await fetch(directLink, { method: "GET" });
+      if (response.status === 429) {
+        setImageLoadError("Bạn đã tải quá nhiều ảnh từ Google Drive trong thời gian ngắn. Vui lòng chờ một lúc rồi thử lại (429 Too Many Requests).");
+      } else if (!response.ok) {
+        setImageLoadError(`Lỗi tải ảnh từ Google Drive: ${response.status} ${response.statusText}`);
+      } else {
+        setImageLoadError("Ảnh không thể tải được. Lỗi không xác định.");
+      }
+    } catch (e: any) {
+      setImageLoadError("Không thể lấy chi tiết lỗi từ Google Drive (có thể do CORS). Ảnh không thể tải được.");
+    }
   };
 
   const handleSearch = async (query: string | File, type: string) => {
