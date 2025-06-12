@@ -1,8 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { SearchSection } from "./components/SearchSection";
 import { ResultsSection } from "./components/ResultsSection";
 import axios from "axios";
-import { gapi } from "gapi-script";
 
 export type imageQueryType = {
   image: { type: string; value: string };
@@ -18,87 +17,22 @@ export function App() {
   const [selectedImage, setSelectedImage] = useState<imageQueryType | null>(null);
   const [imageLoadError, setImageLoadError] = useState<string>("");
 
-  const API_KEY = "AIzaSyAtLWj5hAYsUO0lcGtYt8_Xibspzez0dgY"; // Đã thay bằng API key hợp lệ
-
-  // Khởi tạo Google API Client
-  useEffect(() => {
-    const initClient = () => {
-      if (!gapi.client) {
-        setError("Google API Client không tải được. Kiểm tra gapi-script.");
-        return;
-      }
-
-      gapi.client
-        .init({
-          apiKey: API_KEY,
-          discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"],
-        })
-        .then(() => {
-          console.log("Google API Client đã sẵn sàng");
-        })
-        .catch((err: unknown) => {
-          const errorMessage = err instanceof Error ? err.message : JSON.stringify(err);
-          setError(`Không thể khởi tạo Google API Client: ${errorMessage}`);
-          console.error("Chi tiết lỗi khởi tạo:", err);
-        });
-    };
-
-    if (typeof gapi !== "undefined") {
-      gapi.load("client", initClient);
-    } else {
-      setError("Thư viện gapi không tải được. Kiểm tra môi trường hoặc kết nối.");
-    }
-  }, []);
-
-  // Hàm kiểm tra trạng thái file qua Google Drive API
-  const checkFileStatus = async (fileId: string) => {
-    try {
-      const response = await gapi.client.drive.files.get({
-        fileId: fileId,
-        fields: "id, name, mimeType, webContentLink, error",
-      });
-      return { success: true, data: response.result };
-    } catch (err: any) {
-      const errorDetails = err.result?.error || { message: "Unknown error", code: "N/A" };
-      return {
-        success: false,
-        error: `Google Drive API Error: ${errorDetails.message} (Code: ${errorDetails.code})`,
-      };
-    }
-  };
-
-  // Tách file ID từ URL
+  // Tách file ID từ URL (hỗ trợ nhiều dạng URL Google Drive)
   const extractFileId = (url: string) => {
-    const match = url.match(/id=([^&]+)/);
-    return match ? match[1] : null;
+    let match = url.match(/[?&]id=([^&]+)/);
+    if (match) return match[1];
+    match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if (match) return match[1];
+    match = url.match(/file\/d\/([a-zA-Z0-9_-]+)/);
+    if (match) return match[1];
+    match = url.match(/open\?id=([^&]+)/);
+    if (match) return match[1];
+    return null;
   };
 
-  // Xử lý lỗi tải ảnh
-  const handleImageError = async (url: string) => {
-    const fileId = extractFileId(url);
-    if (!fileId) {
-      const errorMsg = "Application Error: Không thể tách file ID từ URL.";
-      setImageLoadError(errorMsg);
-      console.error(errorMsg, "URL:", url);
-      return;
-    }
-
-    console.log(`Image load failed for fileId: ${fileId}`);
-    
-    const fileStatus = await checkFileStatus(fileId);
-    if (!fileStatus.success) {
-      setImageLoadError(fileStatus.error || "Unknown error occurred.");
-      console.error(fileStatus.error || "Unknown error occurred.");
-      return;
-    }
-
-    const { data } = fileStatus;
-    console.log("File details:", data);
-    if (!data.webContentLink) {
-      setImageLoadError("Application Error: File exists but no webContentLink available.");
-    } else {
-      setImageLoadError("Network Error: File exists but failed to load. Possible CORS or network issue.");
-    }
+  // Xử lý lỗi tải ảnh: chỉ hiện thông báo đơn giản
+  const handleImageError = () => {
+    setImageLoadError("Không thể tải ảnh. File có thể không công khai hoặc đã bị xóa.");
   };
 
   const handleSearch = async (query: string | File, type: string) => {
@@ -167,16 +101,17 @@ export function App() {
             >
               ×
             </button>
-
             <div className="flex flex-col justify-center items-center w-full">
               {selectedImage ? (
                 <>
                   <img
-                    src={`https://drive.google.com/thumbnail?id=${extractFileId(selectedImage.url.value)}&sz=w1000`}
+                    src={(() => {
+                      const fileId = extractFileId(selectedImage.url.value);
+                      return fileId ? `https://lh3.googleusercontent.com/d/${fileId}=w1000` : "";
+                    })()}
                     alt={selectedImage.image.value}
                     className="max-w-full max-h-[80vh] object-contain rounded-md"
-                    onError={() => handleImageError(selectedImage.url.value)}
-                    onLoad={() => console.log(`Image loaded successfully: ${selectedImage.url.value}`)}
+                    onError={handleImageError}
                   />
                   {imageLoadError && (
                     <p className="text-red-500 mt-2 text-center">{imageLoadError}</p>
@@ -186,7 +121,6 @@ export function App() {
                 <p>Đang tải ảnh...</p>
               )}
             </div>
-
             <p className="text-center text-gray-700 mt-2">{selectedImage.image.value.split("#")[1]}</p>
           </div>
         </div>

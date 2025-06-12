@@ -1,52 +1,35 @@
 import { imageQueryType } from "../App";
 import { useState } from "react";
-import { gapi } from "gapi-script";
 
 export function ImageCard({ image, onClick }: { image: imageQueryType; onClick: () => void }) {
   const [loadError, setLoadError] = useState<string>("");
 
-  const convertURLImage = (url: string) => {
-    const urlNew = url.split("id=")[1];
-    return `https://drive.google.com/thumbnail?id=${urlNew}&sz=w1000`;
+  // Tách file ID từ URL (đồng bộ với App)
+  const extractFileId = (url: string) => {
+    let match = url.match(/[?&]id=([^&]+)/);
+    if (match) return match[1];
+    match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if (match) return match[1];
+    match = url.match(/file\/d\/([a-zA-Z0-9_-]+)/);
+    if (match) return match[1];
+    match = url.match(/open\?id=([^&]+)/);
+    if (match) return match[1];
+    return null;
+  };
+
+  // Chuyển fileId thành direct link Googleusercontent (đồng bộ với App)
+  const getImageSrc = (url: string) => {
+    const fileId = extractFileId(url);
+    return fileId ? `https://lh3.googleusercontent.com/d/${fileId}=w1000` : '';
   };
 
   const getNameImage = (name: string) => {
     return name.split("#")[1];
   };
 
-  const checkFileStatus = async (fileId: string) => {
-    try {
-      const response = await gapi.client.drive.files.get({
-        fileId: fileId,
-        fields: "id, name, mimeType, webContentLink, error",
-      });
-      return { success: true, data: response.result };
-    } catch (err: any) {
-      const errorDetails = err.result?.error || { message: "Unknown error", code: "N/A" };
-      return {
-        success: false,
-        error: `Google Drive API Error: ${errorDetails.message} (Code: ${errorDetails.code})`,
-      };
-    }
-  };
-
-  const handleImageError = async (fileId: string) => {
-    console.log(`Image load failed in ImageCard for fileId: ${fileId}`);
-    
-    const fileStatus = await checkFileStatus(fileId);
-    if (!fileStatus.success) {
-      setLoadError(fileStatus.error || "An unknown error occurred.");
-      console.error(fileStatus.error || "An unknown error occurred.");
-      return;
-    }
-
-    const { data } = fileStatus;
-    console.log("File details:", data);
-    if (!data.webContentLink) {
-      setLoadError("Application Error: File exists but no webContentLink available.");
-    } else {
-      setLoadError("Network Error: File exists but failed to load. Possible CORS or network issue.");
-    }
+  // Xử lý lỗi tải ảnh: chỉ hiện thông báo đơn giản
+  const handleImageError = () => {
+    setLoadError("Không thể tải ảnh. File có thể không công khai hoặc đã bị xóa.");
   };
 
   return (
@@ -56,12 +39,11 @@ export function ImageCard({ image, onClick }: { image: imageQueryType; onClick: 
     >
       <div className="aspect-square relative">
         <img
-          src={convertURLImage(image.url.value)}
+          src={getImageSrc(image.url.value)}
           alt={image.image.value}
           className="w-full h-full object-cover"
           loading="lazy"
-          onError={() => handleImageError(image.url.value.split("id=")[1])}
-          onLoad={() => console.log(`ImageCard loaded successfully: ${image.url.value}`)}
+          onError={handleImageError}
         />
         {loadError && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-white text-sm p-2">
