@@ -13,11 +13,46 @@ export function ResultsSection({
   error: string
   onSelectImage: (image: imageQueryType) => void
 }) {
-  // Thêm phân trang: mỗi trang 20 ảnh
-  const PAGE_SIZE = 20
   const [page, setPage] = useState(1)
-  const pagedResults = results.slice(0, page * PAGE_SIZE)
-  const hasMore = results.length > pagedResults.length
+  const pageSize = 10
+  const totalPages = Math.ceil(results.length / pageSize)
+  const pagedResults = results.slice((page - 1) * pageSize, page * pageSize)
+
+  // Hiệu ứng chuyển trang mượt mà
+  // Sử dụng key cho grid để React remount khi đổi trang (kích hoạt animation)
+  // Nút phân trang đẹp, hiển thị số trang, nhảy nhanh, disable hợp lý
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages) setPage(newPage)
+  }
+
+  // Tạo dãy số trang hiển thị (ví dụ: 1 ... 4 5 6 ... 10)
+  const getPageNumbers = () => {
+    const pages = []
+    if (totalPages <= 5) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i)
+    } else {
+      if (page <= 3) {
+        pages.push(1, 2, 3, 4, '...', totalPages)
+      } else if (page >= totalPages - 2) {
+        pages.push(1, '...', totalPages - 3, totalPages - 2, totalPages - 1, totalPages)
+      } else {
+        pages.push(1, '...', page - 1, page, page + 1, '...', totalPages)
+      }
+    }
+    return pages
+  }
+
+  // Xử lý nhập số trang trực tiếp
+  const [inputPage, setInputPage] = useState("");
+  const handleInputPageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value.replace(/[^0-9]/g, "");
+    setInputPage(val);
+  };
+  const handleInputPageGo = () => {
+    const num = Number(inputPage);
+    if (num >= 1 && num <= totalPages) setPage(num);
+    setInputPage("");
+  };
 
   return (
     <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-6 border border-purple-100">
@@ -50,20 +85,89 @@ export function ResultsSection({
       {/* Hiển thị danh sách ảnh */}
       {!isLoading && !error && results.length > 0 && (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {pagedResults.map((image) => (
-              <ImageCard key={image.image.value} image={image} onClick={() => onSelectImage(image)} />
+          <div
+            key={page}
+            className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6 transition-all duration-500 animate-fadein"
+          >
+            {pagedResults.map((image, idx) => (
+              <ImageCard key={idx} image={image} onClick={() => onSelectImage(image)} />
             ))}
           </div>
-          {hasMore && (
-            <div className="flex justify-center mt-6">
-              <button
-                className="px-6 py-2 bg-purple-600 text-white rounded-lg shadow hover:bg-purple-700 transition"
-                onClick={() => setPage(page + 1)}
-              >
-                Xem thêm ảnh
-              </button>
-            </div>
+          {/* Pagination controls */}
+          {totalPages > 1 && (
+            <>
+              <div className="flex flex-col md:flex-row justify-center items-center gap-2 mt-8 select-none">
+                {/* Dòng 1: Nút đầu, trước, số trang, sau, cuối */}
+                <div className="flex flex-row flex-wrap gap-1 items-center justify-center">
+                  <button
+                    className="px-3 py-1 rounded-lg font-semibold bg-gradient-to-r from-purple-200 to-pink-200 text-purple-700 hover:from-purple-300 hover:to-pink-300 shadow disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={() => handlePageChange(1)}
+                    disabled={page === 1}
+                    aria-label="Trang đầu"
+                  >
+                    <span className="hidden md:inline">« Đầu</span>
+                    <span className="md:hidden">«</span>
+                  </button>
+                  <button
+                    className="px-3 py-1 rounded-lg font-semibold bg-gradient-to-r from-purple-200 to-pink-200 text-purple-700 hover:from-purple-300 hover:to-pink-300 shadow disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={() => handlePageChange(page - 1)}
+                    disabled={page === 1}
+                    aria-label="Trang trước"
+                  >
+                    <span className="hidden md:inline">← Trước</span>
+                    <span className="md:hidden">←</span>
+                  </button>
+                  {getPageNumbers().map((p, i) =>
+                    p === '...'
+                      ? <span key={i} className="px-2 text-gray-400">...</span>
+                      : <button
+                          key={i}
+                          className={`px-3 py-1 rounded-lg font-semibold transition-all duration-200 ${p === page ? 'bg-purple-600 text-white shadow-lg scale-110' : 'bg-gray-100 text-purple-700 hover:bg-purple-200'}`}
+                          onClick={() => handlePageChange(Number(p))}
+                          disabled={p === page}
+                        >
+                          {p}
+                        </button>
+                  )}
+                  <button
+                    className="px-3 py-1 rounded-lg font-semibold bg-gradient-to-r from-pink-200 to-purple-200 text-purple-700 hover:from-pink-300 hover:to-purple-300 shadow disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={() => handlePageChange(page + 1)}
+                    disabled={page === totalPages}
+                    aria-label="Trang sau"
+                  >
+                    <span className="hidden md:inline">Sau →</span>
+                    <span className="md:hidden">→</span>
+                  </button>
+                  <button
+                    className="px-3 py-1 rounded-lg font-semibold bg-gradient-to-r from-pink-200 to-purple-200 text-purple-700 hover:from-pink-300 hover:to-purple-300 shadow disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={() => handlePageChange(totalPages)}
+                    disabled={page === totalPages}
+                    aria-label="Trang cuối"
+                  >
+                    <span className="hidden md:inline">Cuối »</span>
+                    <span className="md:hidden">»</span>
+                  </button>
+                </div>
+              </div>
+              {/* Dòng 2: Ô nhập số trang nằm dưới cùng */}
+              <div className="flex justify-center items-center gap-1 mt-4">
+                <input
+                  type="text"
+                  value={inputPage}
+                  onChange={handleInputPageChange}
+                  className="w-16 px-2 py-1 rounded border border-purple-200 focus:outline-none focus:ring-2 focus:ring-purple-400 text-center"
+                  placeholder="Trang..."
+                  onKeyDown={e => { if (e.key === 'Enter') handleInputPageGo(); }}
+                />
+                <button
+                  className="px-3 py-1 rounded bg-purple-500 text-white hover:bg-purple-600"
+                  onClick={handleInputPageGo}
+                  disabled={!inputPage || Number(inputPage) < 1 || Number(inputPage) > totalPages}
+                >
+                  Đến
+                </button>
+              </div>
+            </>
           )}
         </>
       )}

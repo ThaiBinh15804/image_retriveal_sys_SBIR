@@ -17,37 +17,19 @@ export function ImageCard({ image, onClick }: { image: imageQueryType; onClick: 
     return null;
   };
 
-  // Chuyển fileId thành direct link Googleusercontent (đồng bộ với App)
+  // Chuyển fileId thành link thumbnail Google Drive (đồng bộ với App)
   const getImageSrc = (url: string) => {
     const fileId = extractFileId(url);
-    return fileId ? `https://lh3.googleusercontent.com/d/${fileId}=w1000` : '';
+    return fileId ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w300` : '';
   };
 
   const getNameImage = (name: string) => {
     return name.split("#")[1];
   };
 
-  // Xử lý lỗi tải ảnh: hiện thông báo cụ thể (có kiểm tra lỗi 429)
-  const handleImageError = async () => {
-    const url = image.url.value || "";
-    const fileId = extractFileId(url);
-    const directLink = fileId ? `https://lh3.googleusercontent.com/d/${fileId}=w1000` : '';
-    if (!fileId) {
-      setLoadError("Không lấy được fileId từ link ảnh. Link không đúng định dạng hoặc thiếu thông tin.");
-      return;
-    }
-    try {
-      const response = await fetch(directLink, { method: "GET" });
-      if (response.status === 429) {
-        setLoadError("Bạn đã tải quá nhiều ảnh từ Google Drive trong thời gian ngắn. Vui lòng chờ một lúc rồi thử lại (429 Too Many Requests).");
-      } else if (!response.ok) {
-        setLoadError(`Lỗi tải ảnh từ Google Drive: ${response.status} ${response.statusText}`);
-      } else {
-        setLoadError("Ảnh không thể tải được. Lỗi không xác định.");
-      }
-    } catch (e: any) {
-      setLoadError("Không thể lấy chi tiết lỗi từ Google Drive (có thể do CORS). Ảnh không thể tải được.");
-    }
+  // Xử lý lỗi tải ảnh: chỉ hiện thông báo đơn giản
+  const handleImageError = () => {
+    setLoadError("Không thể tải ảnh. File có thể không công khai hoặc đã bị xóa.");
   };
 
   return (
